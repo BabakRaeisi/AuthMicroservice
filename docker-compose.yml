@@ -1,0 +1,37 @@
+name: auth
+
+services:
+  auth-api:
+    build:
+      context: .
+      dockerfile: Auth.API/Dockerfile
+    image: auth-service:latest
+    container_name: auth-api
+    ports:
+      - "5001:5001"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5001
+      ConnectionStrings__PostgresConnection: Host=auth-db;Port=5432;Database=AuthUsers;Username=postgres;Password=postgres123
+      JwtSettings__Secret: YourSuperSecretKeyHereMustBeAtLeast32CharsLong
+      JwtSettings__Issuer: AuthService
+      JwtSettings__Audience: AuthServiceClients
+      JwtSettings__ExpirationMinutes: 60
+    depends_on:
+      - auth-db
+
+  auth-db:
+    image: postgres:17
+    container_name: auth-db
+    environment:
+      POSTGRES_DB: AuthUsers
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_pg_data:/var/lib/postgresql/data
+      - ./Auth.Infrastructure/Scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  auth_pg_data:
