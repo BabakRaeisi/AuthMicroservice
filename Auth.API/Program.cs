@@ -7,41 +7,42 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json.Serialization;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
-   
 builder.Services.AddInfrastructure();
-            
 builder.Services.AddCore();
-
-builder.Services.AddControllers().AddJsonOptions(options=>
-options.JsonSerializerOptions.Converters.Add(new  JsonStringEnumConverter())
+builder.Services.AddHealthChecks();
+builder.Services.AddControllers().AddJsonOptions(options =>
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter())
 );
-//builder.Services.AddAutoMapper(
-//    typeof(ApplicationUserMappingProfile).Assembly,
-//    typeof(RegisterRequestMappingProfile).Assembly
-// );
-//fluent validation
- builder.Services.AddFluentValidationAutoValidation();
-builder.Services.AddEndpointsApiExplorer();
 
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddCors(opt=>
+
+builder.Services.AddCors(options =>
 {
-    opt.AddDefaultPolicy(policy =>
+    options.AddPolicy("AllowLocalClient", policy =>
     {
-        policy.WithOrigins("http://localhost:5173","http://localhost:4200").AllowAnyMethod().AllowAnyHeader();
+        policy.WithOrigins(
+                "http://localhost:5173","http://localhost:4200","https://microbooker.babakraeisi.com"
+              )
+              .AllowAnyHeader()
+              .AllowAnyMethod();
     });
 });
 
 builder.Services.Configure<JWTSetting>(builder.Configuration.GetSection("JwtSettings"));
 
 var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] 
-    ?? throw new InvalidOperationException("JwtSettings:Issuer is missing.");
+    ?? throw new InvalidOperationException("JwtSettings:Issuer is missing structure.");
 var jwtAudience = builder.Configuration["JwtSettings:Audience"] 
-    ?? throw new InvalidOperationException("JwtSettings:Audience is missing.");
-var jwtSecret = builder.Configuration["JwtSettings:Secret"] 
+    ?? throw new InvalidOperationException("JwtSettings:Audience is missing structure.");
+
+// Fallback pattern to prevent container crashing if the environment key layout mismatches
+var jwtSecret = builder.Configuration["JwtSettings:Secret"]
     ?? throw new InvalidOperationException("JwtSettings:Secret is missing.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -61,18 +62,38 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 var app = builder.Build();
 
+// Initialize DB schema
+using (var scope = app.Services.CreateScope())
+{
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var connStr = config.GetConnectionString("PostgresConnection");
+    using var conn = new NpgsqlConnection(connStr);
+    await conn.OpenAsync();
+    using var cmd = conn.CreateCommand();
+    cmd.CommandText = """
+        CREATE TABLE IF NOT EXISTS public."Users" (
+            "UserID" UUID PRIMARY KEY,
+            "Email" TEXT NOT NULL UNIQUE,
+            "PersonName" TEXT,
+            "Gender" TEXT,
+            "Password" TEXT NOT NULL
+        );
+        """;
+    await cmd.ExecuteNonQueryAsync();
+}
+
+// CORS must execute first to respond to preflight browser requests
+
+
 app.UseExceptionHandlingMiddleware();
-
 app.UseRouting();
-app.UseCors();
-
+app.UseCors("AllowLocalClient");
 app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseAuthentication();
 app.UseAuthorization();
-
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.Run();
-
