@@ -1,15 +1,11 @@
-﻿namespace Auth.Core.DTO;
+namespace Auth.Core.DTO;
 
 public class AuthenticationResponse
 {
     public Guid UserID { get; set; }
     public string? Email { get; set; }
     public string? PersonName { get; set; }
+    public string? Role { get; set; }
     public string? Token { get; set; }
     public bool IsSuccessful { get; set; }
 }
-
-
-
-
-
