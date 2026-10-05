@@ -61,7 +61,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtSecret))
+                Encoding.UTF8.GetBytes(jwtSecret)),
+            RoleClaimType = "role",
+            NameClaimType = "name"
         };
     });
 
@@ -81,8 +83,12 @@ using (var scope = app.Services.CreateScope())
             "Email" TEXT NOT NULL UNIQUE,
             "PersonName" TEXT,
             "Gender" TEXT,
-            "Password" TEXT NOT NULL
+            "Password" TEXT NOT NULL,
+            "Role" TEXT NOT NULL DEFAULT 'Customer'
         );
+
+        ALTER TABLE public."Users"
+        ADD COLUMN IF NOT EXISTS "Role" TEXT NOT NULL DEFAULT 'Customer';
         """;
     await cmd.ExecuteNonQueryAsync();
 }
